@@ -1,5 +1,4 @@
 import numpy as np
-from collections import deque
 from math import inf
 import copy
 from state import State
@@ -7,241 +6,111 @@ from state import State
 opp_site = {0: 8, 8: 0, 1: 7, 7: 1, 2: 6, 6: 2, 3: 5, 5: 3}
 
 
-def heuristic(state, player=1):
-    score = 0
-    global_block = state.global_cells.reshape(3, 3)
+def heuristic(state):
+    valid_moves = state.get_valid_moves
+    max_score = float(-inf)
+    min_score = float(inf)
+    for move in valid_moves:
+        state_copy = copy.deepcopy(state)
+        state_copy.act_move(move)
+        score = 0
+        win_game_score = 25
+        two_in_sq_score1 = 5
+        two_in_sq_score2 = 2
+        win_board_score = 5
+        win_center_board_score = 10
+        win_corner_board_score = 3
+        global_block = state_copy.global_cells.reshape(3, 3)
 
-    # print(global_block)
-    for id in range(0, 3):
-        if global_block[:, id][global_block[:, id] == 1].sum() == 2:
-            score += 4
-        if global_block[:, id][global_block[:, id] == -1].sum() == -2:
-            score += -4
-        if global_block[id, :][global_block[id, :] == 1].sum() == 2:
-            score += 4
-        if global_block[id, :][global_block[id, :] == -1].sum() == -2:
-            score += -4
-
-    for ind, block in enumerate(state.blocks):
-        if block[1, 1] == 1:
-            score += 3
-
-        if block[1, 1] == -1:
-            score += -3
-
-        if State.game_result(state, block) == 1:
-            score += 5
-
-        if State.game_result(state, block) == -1:
-            score += -5
-
-        if State.game_result(state, block) == 1 and ind == 4:
-            score += 10
-
-        if State.game_result(state, block) == -1 and ind == 4:
-            score += -10
-
-        for id in range(0, 3):
-            if block[:, id][block[:, id] == 1].sum() == 2:
-                score += 2
-            if block[:, id][block[:, id] == -1].sum() == -2:
-                score += -2
-            if block[id, :][block[id, :] == 1].sum() == 2:
-                score += 2
-            if block[id, :][block[id, :] == -1].sum() == -2:
-                score += -2
-    return score
-
-
-def heuristic2(state):
-    score = 0
-    global_block = state.global_cells.reshape(3, 3)
-
-    # print("global block:", global_block)
-    for id in range(0, 3):
-        if State.game_result(state, global_block) == 1:
-            score += 15
-        elif State.game_result(state, global_block) == -1:
-            score += -15
-        else:
-            if global_block[:, id][global_block[:, id] == 1].sum() == 2:
-                score += 4
-            if global_block[:, id][global_block[:, id] == -1].sum() == -2:
-                score += -4
-            if global_block[id, :][global_block[id, :] == 1].sum() == 2:
-                score += 4
-            if global_block[id, :][global_block[id, :] == -1].sum() == -2:
-                score += -4
-
-            diag_left = np.diag(global_block)
-            diag_right = np.diag(global_block[::-1])
-
-            if diag_left[diag_left == 1].sum() == 2:
-                score += 4
-            if diag_left[diag_left == -1].sum() == -2:
-                score += -4
-            if diag_right[diag_right == 1].sum() == 2:
-                score += 4
-            if diag_right[diag_right == -1].sum() == -2:
-                score += -4
-
-    for ind, block in enumerate(state.blocks):
-        is_win = False
-        if State.game_result(state, block) == 1:
-            score += 5
-            is_win = True
-
-        elif State.game_result(state, block) == -1:
-            score += -5
-            is_win = True
-
-        if State.game_result(state, block) == 1 and ind == 4:
-            score += 10
-            is_win = True
-
-        elif State.game_result(state, block) == -1 and ind == 4:
-            score += -10
-            is_win = True
-
-        elif State.game_result(state, block) == 1 and ind in [0, 2, 6, 8]:
-            score += 3
-            is_win = True
-
-        elif State.game_result(state, block) == -1 and ind in [0, 2, 6, 8]:
-            score += -3
-            is_win = True
-
-        if not is_win:
-            if state.previous_move.index_local_board == 4:
-                # getting a square in center board is worth 3
-                score += block[block == 1].sum() * 3
-                score += block[block == -1].sum() * -3
-
-            # getting a center square in any board is worth 3
-            if block[1, 1] == 1:
-                score += 3
-
-            if block[1, 1] == -1:
-                score += -3
-
+        def cal_2_in_sq_score(board, sq_score):
+            val = 0
             for id in range(0, 3):
-                if block[:, id][block[:, id] == 1].sum() == 2:
-                    score += 2
-                if block[:, id][block[:, id] == -1].sum() == -2:
-                    score += -2
-                if block[id, :][block[id, :] == 1].sum() == 2:
-                    score += 2
-                if block[id, :][block[id, :] == -1].sum() == -2:
-                    score += -2
+                # two board win in seq add 4 (row, col, dig)
+                if (board[:, id][board[:, id] == 1].sum() == 2) \
+                        and (board[:, id][board[:, id] == -1].sum() == 0):
+                    val += sq_score
+                if (board[:, id][board[:, id] == -1].sum() == -2) \
+                        and (board[:, id][board[:, id] == 1].sum() == 0):
+                    val += -sq_score
+                if (board[id, :][board[id, :] == 1].sum() == 2) \
+                        and (board[id, :][board[id, :] == -1].sum() == 0):
+                    val += sq_score
+                if (board[id, :][board[id, :] == -1].sum() == -2) \
+                        and (board[id, :][board[id, :] == 1].sum() == 0):
+                    val += -sq_score
 
-            diag_topleft = np.diag(block)
-            diag_topright = np.diag(block[::-1])
+            diag_left = np.diag(board)
+            diag_right = np.diag(board[::-1])
 
-            if diag_topleft[diag_topleft == 1].sum() == 2:
-                score += 2
-            if diag_topleft[diag_topleft == -1].sum() == -2:
-                score += -2
-            if diag_topright[diag_topright == 1].sum() == 2:
-                score += 2
-            if diag_topright[diag_topright == -1].sum() == -2:
-                score += -2
-    return score
+            if (diag_left[diag_left == 1].sum() == 2) \
+                    and (diag_left[diag_left == -1].sum() == 0):
+                val += sq_score
+            if (diag_left[diag_left == -1].sum() == -2) \
+                    and (diag_left[diag_left == 1].sum() == 0):
+                val += -sq_score
+            if (diag_right[diag_right == 1].sum() == 2) \
+                    and (diag_right[diag_right == -1].sum() == 0):
+                val += sq_score
+            if (diag_right[diag_right == -1].sum() == -2) \
+                    and (diag_right[diag_right == 1].sum() == 0):
+                val += -sq_score
+            return val
 
-
-def heuristic1(state):
-    score = 0
-    global_block = state.global_cells.reshape(3, 3)
-
-    # print("global block:", global_block)
-    for id in range(0, 3):
-        if State.game_result(state, global_block) == 1:
-            score += 15
-        elif State.game_result(state, global_block) == -1:
-            score += -15
+        if State.game_result(state_copy, global_block) == 1:
+            score += win_game_score
+        elif State.game_result(state_copy, global_block) == -1:
+            score += -win_game_score
         else:
-            if global_block[:, id][global_block[:, id] == 1].sum() == 2:
-                score += 4
-            if global_block[:, id][global_block[:, id] == -1].sum() == -2:
-                score += -4
-            if global_block[id, :][global_block[id, :] == 1].sum() == 2:
-                score += 4
-            if global_block[id, :][global_block[id, :] == -1].sum() == -2:
-                score += -4
+            score += cal_2_in_sq_score(global_block, two_in_sq_score1)
 
-            diag_left = np.diag(global_block)
-            diag_right = np.diag(global_block[::-1])
+            block = state_copy.blocks[state_copy.previous_move.index_local_board]
+            id_local = state_copy.previous_move.index_local_board
+            is_win = False
 
-            if diag_left[diag_left == 1].sum() == 2:
-                score += 4
-            if diag_left[diag_left == -1].sum() == -2:
-                score += -4
-            if diag_right[diag_right == 1].sum() == 2:
-                score += 4
-            if diag_right[diag_right == -1].sum() == -2:
-                score += -4
+            # one board win add 5
+            if State.game_result(state_copy, block) == 1:
+                score += win_board_score
+                is_win = True
 
-    block = state.blocks[state.previous_move.index_local_board]
-    id_local = state.previous_move.index_local_board
-    is_win = False
+            elif State.game_result(state_copy, block) == -1:
+                score += -win_board_score
+                is_win = True
 
-    if State.game_result(state, block) == 1:
-        score += 5
-        is_win = True
+            # win center board add 10
+            if State.game_result(state_copy, block) == 1 and id_local == 4:
+                score += win_center_board_score
+                is_win = True
 
-    elif State.game_result(state, block) == -1:
-        score += -5
-        is_win = True
+            elif State.game_result(state_copy, block) == -1 and id_local == 4:
+                score += -win_center_board_score
+                is_win = True
 
-    if State.game_result(state, block) == 1 and id_local == 4:
-        score += 10
-        is_win = True
+            # win corner board add 3
+            elif State.game_result(state_copy, block) == 1 and id_local in [0, 2, 6, 8]:
+                score += win_corner_board_score
+                is_win = True
 
-    elif State.game_result(state, block) == -1 and id_local == 4:
-        score += -10
-        is_win = True
+            elif State.game_result(state_copy, block) == -1 and id_local in [0, 2, 6, 8]:
+                score += -win_corner_board_score
+                is_win = True
 
-    elif State.game_result(state, block) == 1 and id_local in [0, 2, 6, 8]:
-        score += 3
-        is_win = True
+            if not is_win:
+                if id_local == 4:
+                    # getting a square in center board is worth 3
+                    if state_copy.player_to_move == -1:
+                        score += 3
+                    else:
+                        score += -3
 
-    elif State.game_result(state, block) == -1 and id_local in [0, 2, 6, 8]:
-        score += -3
-        is_win = True
-    if not is_win:
-        if state.previous_move.index_local_board == 4:
-            # getting a square in center board is worth 3
-            score += block[block == 1].sum() * 3
-            score += block[block == -1].sum() * -3
-
-        # getting a center square in any board is worth 3
-        if block[1, 1] == 1:
-            score += 3
-
-        if block[1, 1] == -1:
-            score += -3
-
-        for id in range(0, 3):
-            if block[:, id][block[:, id] == 1].sum() == 2:
-                score += 2
-            if block[:, id][block[:, id] == -1].sum() == -2:
-                score += -2
-            if block[id, :][block[id, :] == 1].sum() == 2:
-                score += 2
-            if block[id, :][block[id, :] == -1].sum() == -2:
-                score += -2
-
-        diag_topleft = np.diag(block)
-        diag_topright = np.diag(block[::-1])
-
-        if diag_topleft[diag_topleft == 1].sum() == 2:
-            score += 2
-        if diag_topleft[diag_topleft == -1].sum() == -2:
-            score += -2
-        if diag_topright[diag_topright == 1].sum() == 2:
-            score += 2
-        if diag_topright[diag_topright == -1].sum() == -2:
-            score += -2
-    return score
+                # two tiles win in seq in small board add 2 (row, col, dig)
+                score += cal_2_in_sq_score(block,two_in_sq_score2)
+        if state.player_to_move == 1:
+            if score > max_score:
+                max_score = score
+        else:
+            if score < min_score:
+                min_score = score
+    return max_score if state.player_to_move == 1 else min_score
 
 
 def unbeatable_strategy(cur_state):
@@ -307,52 +176,25 @@ def unbeatable_strategy(cur_state):
                     return move
 
     # if something's wrong, then using minimax ^^
-    score, path = minimax1(cur_state, 2, float(-inf), float(inf), True)
+    score, path = minimax(cur_state, 2, float(-inf), float(inf), True)
     if cur_state in path:
         return path[cur_state]
     return np.random.choice(cur_state.get_valid_moves)
 
 
-# def minimax(state, depth, player):
-#     valid_moves = state.get_valid_moves
-#     #print("valid moves:", valid_moves)
-#     if depth == 0 or len(valid_moves) == 0:
-#         # print("state_leaf:", state.blocks)
-#         # print("score:",heuristic(state, player))
-#         return heuristic1(state, player), None
-#
-#     best_score = float(-inf)
-#     path = {}
-#
-#     for succ in valid_moves:
-#         #print("state1:",state)
-#         state_copy = copy.deepcopy(state)
-#         state_copy.act_move(succ)
-#         value = -minimax(state_copy, depth - 1, player)[0]
-#         print("move:", succ)
-#         print("score:", value)
-#         if value > best_score:
-#             best_score = value
-#             path[state] = succ
-#     return best_score, path
-
 def minimax(state, depth, alpha, beta, maximizingPlayer):
     valid_moves = state.get_valid_moves
-    # print("valid moves:", valid_moves)
     if depth == 0 or len(valid_moves) == 0:
-        return heuristic1(state), {}
+        return heuristic(state), {}
 
     path = {}
     if maximizingPlayer:
         max_score = float(-inf)
 
         for succ in valid_moves:
-            # print("state1:",state)
             state_copy = copy.deepcopy(state)
             state_copy.act_move(succ)
             value = minimax(state_copy, depth - 1, alpha, beta, False)[0]
-            # print("move:", succ)
-            # print("score:", value)
             if value > max_score:
                 max_score = value
                 path[state] = succ
@@ -365,12 +207,9 @@ def minimax(state, depth, alpha, beta, maximizingPlayer):
         min_score = float(inf)
 
         for succ in valid_moves:
-            # print("state1:",state)
             state_copy = copy.deepcopy(state)
             state_copy.act_move(succ)
             value = minimax(state_copy, depth - 1, alpha, beta, True)[0]
-            # print("move1:", succ)
-            # print("score1:", value)
             if value < min_score:
                 min_score = value
                 path[state] = succ
@@ -383,8 +222,12 @@ def minimax(state, depth, alpha, beta, maximizingPlayer):
 def select_move(cur_state, remain_time):
     if cur_state.player_to_move == 1:
         return unbeatable_strategy(cur_state)
+
     else:
         score, path = minimax(cur_state, 2, float(-inf), float(inf), False)
         if cur_state in path:
             return path[cur_state]
-        return np.random.choice(cur_state.get_valid_moves)
+        validMoves = cur_state.get_valid_moves
+        if len(validMoves) > 0:
+            return np.random.choice(validMoves)
+        return None
